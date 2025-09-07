@@ -1,3 +1,4 @@
+import json
 import random
 from pathlib import Path
 
@@ -7,9 +8,16 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader, random_split
 
+from bci_brake.constants import dist_data_dir
+
+X_DROP_FEATS = ("EOGv", "EOGh", "EMGf", "lead_gas", "lead_brake", "dist_to_lead", "wheel_X", "wheel_Y", "gas", "brake")
+# x_drop_feats = ["lead_gas", "lead_brake", "dist_to_lead", "wheel_X", "wheel_Y", "gas", "brake"]
+
+with open(dist_data_dir.joinpath("x_features.json")) as f:
+    X_FEATS = json.load(f)
+
 
 class BrakeDset(Dataset):
-    x_drop_feats = ["EOGv", "EOGh", "EMGf", "lead_gas", "lead_brake", "dist_to_lead", "wheel_X", "wheel_Y", "gas", "brake"]
 
     def __init__(
             self,
@@ -19,7 +27,8 @@ class BrakeDset(Dataset):
             freq: float,
             p_tps: float = 0.5,
             window_length: int = 2000,
-            predict_horizon_length: int = 500,
+            predict_horizon_length: tuple[int, int] = (100, 500),
+            x_alt_feats: tuple[str, ...] | list[str] = X_DROP_FEATS
     ):
         """
 
@@ -33,15 +42,20 @@ class BrakeDset(Dataset):
             p_tps: proportion of TPs
         """
 
-        self.x = (x - x.mean(0, keepdims=True)) / x.std(0, keepdims=True)
+        feat_idxs, self.x_features = zip(*[(idx, feat) for idx, feat in enumerate(X_FEATS) if feat not in x_alt_feats])
+        self.x = x[:, feat_idxs]  # iterations
+
+        alt_feat_idxs, self.alt_x_features = zip(*[(idx, feat) for idx, feat in enumerate(X_FEATS) if feat in x_alt_feats])
+        self.alt_x = x[:, alt_feat_idxs]
 
         self.times_lead_brakes = times_lead_brakes
         self.reaction_times = np.minimum(reaction_times, window_length)  # ms
+        predict_horizon_length = np.random.randint(predict_horizon_length[0], predict_horizon_length[1], self.reaction_times.shape[0])
         adj_reaction_times = np.minimum(self.reaction_times + predict_horizon_length, window_length)
         self.padding = window_length - adj_reaction_times
 
         self.n_tps = times_lead_brakes.shape[0]
-        self.n = int(self.n_tps / p_tps)
+        self.n = int(self.n_tps / p_tps) if p_tps > 0 else self.n_tps
         self.p_tps = p_tps
 
         self.freq = freq  # 1 / s
@@ -58,7 +72,8 @@ class BrakeDset(Dataset):
             p_tps: float | list[float],
             seq_split: list[float] | None = None,
             window_length: int = 2000,
-            predict_horizon_length: int = 500,
+            predict_horizon_length: tuple[int, int] = (100, 500),
+            x_alt_feats: tuple[str, ...] = X_DROP_FEATS
     ):
 
         data = mat73.loadmat(p)
@@ -66,9 +81,7 @@ class BrakeDset(Dataset):
         mrk = data["mrk"]
         freq = cnt["fs"]  # 1 / s
 
-        feats = cnt["clab"]
-        feat_idxs = [idx for idx, feat in enumerate(feats) if feat not in BrakeDset.x_drop_feats]
-        x = cnt["x"][:, feat_idxs]  # iterations
+        x = cnt["x"]
 
         y = np.argmax(mrk['y'], axis=0)
         class_map = mrk["className"]
@@ -127,7 +140,8 @@ class BrakeDset(Dataset):
                         freq=freq,
                         p_tps=p_tps_,
                         window_length=window_length,
-                        predict_horizon_length=predict_horizon_length
+                        predict_horizon_length=predict_horizon_length,
+                        x_alt_feats=x_alt_feats
                     )
                 )
 
@@ -167,9 +181,16 @@ class BrakeDset(Dataset):
 
         stop = int(start + self.samples_per_window)
         x = self.x[start: stop, :]
+        alt_x = self.alt_x[start: stop, :]
+
+        ms100 = int(100 / self.period)
+        # tmp_x = x[:ms100]
+        # x = (x - tmp_x.mean(0, keepdims=True)) / tmp_x.std(0, keepdims=True)
+        x = x - x[:ms100].mean(0, keepdims=True)
+
         y = np.zeros(self.samples_per_window)
         reaction_time = np.nan
-        return x, y, reaction_time
+        return x, y, reaction_time, alt_x
 
     def __getitem__(self, item):
         if item >= self.n:
@@ -181,7 +202,7 @@ class BrakeDset(Dataset):
         brake_time = self.times_lead_brakes[item]  # ms
         react_time = self.reaction_times[item]  # ms
         padding = self.padding[item]  # ms
-        left_padding = int(random.random() * padding) + self.H  # ms
+        left_padding = int(random.random() * padding) + self.H[item]  # ms
 
         start = (brake_time - left_padding) / self.period  # idx
         stop = start + self.T / self.period  # idx
@@ -196,9 +217,15 @@ class BrakeDset(Dataset):
             stop -= offset
 
         x = self.x[start: stop, :]
+        ms100 = int(100 / self.period)
+        # tmp_x = x[:ms100]
+        # x = (x - tmp_x.mean(0, keepdims=True)) / tmp_x.std(0, keepdims=True)
+        x = x - x[:ms100].mean(0, keepdims=True)
+
+        alt_x = self.alt_x[start: stop, :]
 
         n_left_padding = int(left_padding / self.period)
         n_right_padding = int((self.T / self.period) - n_left_padding)
         y = np.concat(([0] * n_left_padding, [1] * n_right_padding))
 
-        return x, y, react_time
+        return x, y, react_time, alt_x

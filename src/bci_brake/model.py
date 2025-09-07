@@ -5,49 +5,6 @@ from torch import Tensor
 import torch.nn.functional as F
 
 
-class EEGBrakeLinv0(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-        self.r_lin0 = nn.LazyLinear(256)
-        self.r_lin1 = nn.Linear(256, 128)
-        self.r_lin2 = nn.Linear(128, 64)
-
-        self.f_lin0 = nn.LazyLinear(256)
-        self.f_lin1 = nn.Linear(256, 128)
-        self.f_lin2 = nn.Linear(128, 64)
-        self.f_lin3 = nn.LazyLinear(1)
-
-        self.act_fn = nn.GELU()
-
-    def forward(self, x):
-        # x: (N, R, F)
-
-        x_r = self.r_lin0(x.permute((0, 2, 1)))
-        x_r = self.act_fn(x_r)
-
-        x_r = self.r_lin1(x_r)
-        x_r = self.act_fn(x_r)
-
-        x_r = self.r_lin2(x_r)
-        x_r = self.act_fn(x_r)
-
-
-        x_f = self.f_lin0(x)
-        x_f = self.act_fn(x_f)
-
-        x_f = self.f_lin1(x_f)
-        x_f = self.act_fn(x_f)
-
-        x_f = self.f_lin2(x_f)
-        x_f = self.act_fn(x_f)
-
-        x = x_f @ x_r.permute((0, 2, 1))
-        x = self.f_lin3(x)
-
-        return x.squeeze(-1)
-
-
 class EEGBrakeLinv1(nn.Module):
     def __init__(self, n_rows, n_features):
         super().__init__()
