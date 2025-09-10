@@ -19,8 +19,10 @@ Moreover, in a vehicle, the required action is much slower than a simple mouse c
 Visual information must travel from the eyes to the brain, be processed and evaluated, 
 and then converted into a motor command that moves from the brain to the leg, releasing the accelerator and pressing the brake.
 
-Studies confirm this gap. In automobile simulators with emergency braking tasks, 
-Haufe et al. (2011) reported a median reaction time of 665 ms, and Nagler et al. (1973) reported an average of 627 ms.
+Studies confirm this gap. In automobile simulators with emergency braking tasks,
+[Haufe et al. (2011)](https://www.researchgate.net/publication/51530664_EEG_potentials_predict_upcoming_emergency_braking_during_simulated_driving)
+reported a median reaction time of 665 ms, and [Nagler et al. (1973)](https://www.sciencedirect.com/science/article/pii/0300943273900411)
+reported an average of 627 ms.
 That’s roughly 400 ms slower than reaction times under ideal lab conditions. 
 At highway speeds of 100 km/h (~62 mph), 400 ms corresponds to about 11 meters traveled before braking begins. 
 Even at 32 km/h (~20 mph) — a typical speed when passing through an intersection — that delay translates to about 3.5 meters,
