@@ -20,7 +20,7 @@ device = 0
 window_length = 2000
 predict_horizon_length = (100, 500)
 
-training_name = "focal_loss"
+training_name = "focal_loss_2"
 
 eeg_features = 59
 data_dir = Path(__file__).parent.parent.parent.joinpath("data")

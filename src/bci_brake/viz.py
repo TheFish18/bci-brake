@@ -49,6 +49,7 @@ def plot_braking_event(model: torch.nn.Module, device, dset: BrakeDset, i: int |
     lead_brake_idx = alt_x_features.index("lead_brake")
     participant_brake_idx = alt_x_features.index("brake")
     participant_gas_idx = alt_x_features.index("gas")
+    emg_idx = alt_x_features.index("EMGf")
 
     if plt_kwargs is None:
         plt_kwargs = {}
@@ -62,7 +63,7 @@ def plot_braking_event(model: torch.nn.Module, device, dset: BrakeDset, i: int |
     dist_to_lead = alt_x[:, dist_to_lead_idx] * -1
     lead_brake = alt_x[:, lead_brake_idx]
     participant_brake = alt_x[:, participant_brake_idx]
-    participant_gas = alt_x[:, participant_gas_idx]
+    emg = alt_x[:, emg_idx]
 
     x = torch.tensor(x, device=device, dtype=torch.float32).unsqueeze(0)
 
@@ -75,18 +76,24 @@ def plot_braking_event(model: torch.nn.Module, device, dset: BrakeDset, i: int |
     n = len(target)
     time = np.linspace(0, val_dset.period * n, n)
     stim_idx = np.argmax(target)
-    stim_time = time[stim_idx] + react_time
 
-    ax0.plot(time, pred)
-    ax0.plot(time, target)
-    ax0.vlines(stim_time, ymin=0, ymax=1)
+    stim_time = time[stim_idx]
+    response_time = stim_time + react_time
 
-    ax1.plot(time, lead_brake)
-    ax1.plot(time, participant_brake)
-    ax1.plot(time, participant_gas)
+    ax0.plot(time, pred, label="AI brake probability", color="green")
+    ax0.vlines(stim_time, ymin=0, ymax=1, label="lead brakes", color="red")
+    ax0.vlines(response_time, ymin=0, ymax=1, label="participant brakes", color='purple')
+    ax0.legend(loc="upper left")
 
-    ax2.plot(time, dist_to_lead)
+    ax1.plot(time, lead_brake, label="lead brake deflection", color="red")
+    ax1.plot(time, participant_brake, label="participant brake deflection", color="purple")
+    ax1.legend()
 
+    ax2.plot(time, dist_to_lead, label="distance to lead", color="blue")
+    ax2.legend()
+
+    f.tight_layout()
+    plt.legend()
     plt.show()
 
 def plt_breaking_start(dset: BrakeDset):
@@ -102,7 +109,7 @@ def plt_breaking_start(dset: BrakeDset):
 
 if __name__ == "__main__":
     mat_p = "/home/josh/projects/python/BCIBrake/data/mats/VPih.mat"
-    model_p = "/home/josh/projects/python/BCIBrake/data/trainings/focal_loss/models/best.pt"
+    model_p = "/home/josh/projects/python/BCIBrake/data/trainings/focal_loss_2/models/best.pt"
     device = 0
     # plot_reaction_time(mat_p, plt_kwargs={"figsize": (12, 6)})
 

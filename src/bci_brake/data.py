@@ -4,6 +4,8 @@ from pathlib import Path
 
 import mat73
 import numpy as np
+from scipy.signal import savgol_filter
+import matplotlib.pyplot as plt
 
 import torch
 from torch.utils.data import Dataset, DataLoader, random_split
@@ -80,32 +82,58 @@ class BrakeDset(Dataset):
         cnt = data["cnt"]
         mrk = data["mrk"]
         freq = cnt["fs"]  # 1 / s
+        period = 1000 / freq
 
         x = cnt["x"]
 
         y = np.argmax(mrk['y'], axis=0)
         class_map = mrk["className"]
-        y = [class_map[cls_idx] for cls_idx in y]
         times = mrk["time"]
-        reaction_times_ = mrk["event"]["react"]  # ms
 
-        times_lead_brakes = []
+        participant_brakes = x[:, X_FEATS.index("brake")]  # participant's brake pedal deflection
+        time_lead_brakes = times[y == class_map.index("car_brake")]
         reaction_times = []
 
-        for i, cls in enumerate(y):
-            n_brake = len(times_lead_brakes)
-            n_react = len(reaction_times)
+        for time_brakes in time_lead_brakes:
+            idx = int(time_brakes / period)
+            one_sec = int(1000 / period)
+            rel_idxs = np.arange(one_sec)
 
-            if n_brake == n_react:
-                if cls == "car_brake":
-                    times_lead_brakes.append(times[i])
+            brake_deflection = participant_brakes[idx: idx + one_sec]
 
-            else:
-                if cls == "react_emg":
-                    reaction_times.append(reaction_times_[i])
+            mask = brake_deflection > 0.01
 
-        times_lead_brakes = np.array(times_lead_brakes)
+            brake_deflection = brake_deflection[mask]
+            rel_idxs = rel_idxs[mask]
+
+            reaction_time = 1000
+            if len(brake_deflection):
+                for i in range(len(brake_deflection) - 10):
+                    if brake_deflection[i + 5: i + 10].mean() > brake_deflection[i: i + 5].mean():
+                        reaction_time = rel_idxs[i] * period
+                        break
+
+            reaction_times.append(reaction_time)
+
         reaction_times = np.array(reaction_times)
+        mask = reaction_times <= 1000
+        times_lead_brakes = time_lead_brakes[mask]
+        reaction_times = reaction_times[mask]
+
+        # for i, cls in enumerate(y):
+        #     n_brake = len(times_lead_brakes)
+        #     n_react = len(reaction_times)
+
+#             if n_brake == n_react:
+#                 if cls == "car_brake":
+#                     times_lead_brakes.append(times[i])
+
+#             else:
+#                 if cls == "react_emg":
+#                     reaction_times.append(reaction_times_[i])
+
+#         times_lead_brakes = np.array(times_lead_brakes)
+#         reaction_times = np.array(reaction_times)
 
         if len(times_lead_brakes) != len(reaction_times):
             n = min(len(times_lead_brakes), len(reaction_times))

@@ -124,7 +124,7 @@ def calc_brake_metrics(
     bci_react_times = []
 
     model.to(device)
-    for x, target, react_time in data_loader:
+    for x, target, react_time, alt_x in data_loader:
         x = x.type(torch.float32).to(device)
         target = target.type(torch.float32).to(device)
 
@@ -239,7 +239,7 @@ def train_bci_model(
         val_losses = []
 
         model.train()
-        for x, target, react_time in tqdm(train_loader):
+        for x, target, react_time, alt_x in tqdm(train_loader):
             x = x.to(device).type(torch.float32)
             target = target.to(device).type(torch.float32)
             pred = model(x)
@@ -254,7 +254,7 @@ def train_bci_model(
 
         model.eval()
         with torch.no_grad():
-            for x, target, react_time in tqdm(val_loader):
+            for x, target, react_time, alt_x in tqdm(val_loader):
                 x = x.to(device).type(torch.float32)
                 target = target.to(device).type(torch.float32)
 
