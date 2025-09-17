@@ -5,13 +5,15 @@ from typing import Callable
 import numpy as np
 from tqdm import tqdm
 
+from ray import tune
+from ray.tune import Checkpoint
+
 import torch
 from torch import nn
 import torch.nn.functional as F
-from torch.utils.data import ConcatDataset
-from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.ops import sigmoid_focal_loss
+from torch.utils.data import ConcatDataset, DataLoader
 
 from bci_brake.data import BrakeDset
 
@@ -215,20 +217,24 @@ def train_bci_model(
         loss_fn: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
         train_dset: BrakeDset,
         val_dset: BrakeDset,
-        log_dir: Path,
+        log_dir: Path | None,
         *,
         device=0,
         epochs: int = 50,
         batch_size: int = 25,
-        verbose: bool = True
+        verbose: bool = True,
+        tuning: bool = False
 ):
-    writer = SummaryWriter(log_dir=log_dir)
     model.to(device)
     train_loader = DataLoader(train_dset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_dset, batch_size=batch_size, shuffle=False)
 
-    model_save_dir = log_dir / "models"
-    model_save_dir.mkdir(exist_ok=True)
+
+    writer = None
+    if log_dir is not None:
+        writer = SummaryWriter(log_dir=log_dir)
+        model_save_dir = log_dir / "models"
+        model_save_dir.mkdir(exist_ok=True)
 
     best_val_iou = 0
 
@@ -239,7 +245,7 @@ def train_bci_model(
         val_losses = []
 
         model.train()
-        for x, target, react_time, alt_x in tqdm(train_loader):
+        for x, target, react_time, alt_x in tqdm(train_loader, disable=not verbose):
             x = x.to(device).type(torch.float32)
             target = target.to(device).type(torch.float32)
             pred = model(x)
@@ -254,7 +260,7 @@ def train_bci_model(
 
         model.eval()
         with torch.no_grad():
-            for x, target, react_time, alt_x in tqdm(val_loader):
+            for x, target, react_time, alt_x in tqdm(val_loader, disable=not verbose):
                 x = x.to(device).type(torch.float32)
                 target = target.to(device).type(torch.float32)
 
@@ -267,7 +273,7 @@ def train_bci_model(
 
                 val_losses.append(loss.item())
 
-        calc_brake_metrics(
+        train_metrics = calc_brake_metrics(
             model=model,
             data_loader=train_loader,
             writer=writer,
@@ -286,35 +292,51 @@ def train_bci_model(
             device=device
         )
 
+        train_loss = np.mean(train_losses).item()
+        val_loss = np.mean(val_losses).item()
+
+        if tuning:
+            train_metrics["loss"] = train_loss
+            val_metrics["loss"] = val_loss
+
+            report_metrics = {}
+            for prefix, metrics in zip(("train", "validation"), (train_metrics, val_metrics)):
+                for m, v in metrics.items():
+
+                    report_metrics[f"{prefix}_{m}"] = v
+
+            tune.report(report_metrics)
+
         val_iou = val_metrics["iou"]
         scheduler.step(val_iou)
         curr_lr = scheduler.get_last_lr()[0]
 
-        train_loss = np.mean(train_losses).item()
-        val_loss = np.mean(val_losses).item()
 
-        if verbose:
+        if verbose and not tuning:
             print(f"EPOCH: {epoch}: ")
             print(f"\tTrain: ")
             print(f"\t\tloss: {train_loss}")
             print(f"\tValidation: ")
             print(f"\t\tloss: {val_loss}")
 
-        writer.add_scalars(
-            "loss",
-            {
-                'train': train_loss,
-                "validation": val_loss
-            },
-            global_step=epoch
-        )
+        if writer is not None:
+            writer.add_scalars(
+                "loss",
+                {
+                    'train': train_loss,
+                    "validation": val_loss
+                },
+                global_step=epoch
+            )
 
-        writer.add_scalar("lr", curr_lr, epoch)
+            writer.add_scalar("lr", curr_lr, epoch)
 
-        if val_iou > best_val_iou:
-            best_val_iou = val_iou
-            torch.save(model.state_dict(), model_save_dir.joinpath("best.pt"))
-            with open(model_save_dir.joinpath("best.txt"), "w") as f:
-                f.write(str(epoch))
+        if log_dir is not None:
+            if val_iou > best_val_iou:
+                best_val_iou = val_iou
+                torch.save(model.state_dict(), model_save_dir.joinpath("best.pt"))
+                with open(model_save_dir.joinpath("best.txt"), "w") as f:
+                    f.write(str(epoch))
 
-    torch.save(model.state_dict(), model_save_dir.joinpath("last.pt"))
+    if log_dir is not None:
+        torch.save(model.state_dict(), model_save_dir.joinpath("last.pt"))

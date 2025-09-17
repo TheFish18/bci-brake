@@ -75,10 +75,11 @@ if __name__ == "__main__":
     model.to(device)
     model.eval()
 
-    # train_dset, val_dset = load_data_train_all(mat_dir)
-    train_dset, val_dset = BrakeDset.init_from_p(mat_p, p_tps=(0.5, 0.5), seq_split=(0.8, 0.2))
+    train_dset, val_dset = load_data_train_all(mat_dir)
+    # train_dset, val_dset = BrakeDset.init_from_p(mat_p, p_tps=(0.5, 0.5), seq_split=(0.8, 0.2))
     scores(model, val_dset, device=device)
 
+    eval_model(model, val_dset, device=device)
     # for i in range(5):
     #     eval_model(model, val_dset, device=device)
     #     print()

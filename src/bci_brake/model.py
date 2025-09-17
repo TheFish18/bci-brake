@@ -164,20 +164,43 @@ class EEGBrakeSeqLSTM(nn.Module):
 # Example usage
 # ---------------------------
 if __name__ == "__main__":
-    B, T, C = 32, 500, 64   # batch, 2s window @250Hz, 64 EEG channels
+    import matplotlib.pyplot as plt
+
+    B, T, C = 32, 400, 59   # batch, 2s window @250Hz, 59 EEG channels
     x = torch.randn(B, T, C)
 
-    model = EEGBrakeSeqLSTM(n_channels=C)
-    logits = model(x)   # logits: (B,), attn_w: (B, T)
+    model = EEGBrakeSeqLSTM(
+        n_channels=59,
+        cnn_branch_out=16,
+        kernels=(5, 29, 97),
+        dilations=(1, 4, 4),
+        lstm_hidden=164,
+        dropout=0.2,
+    )
 
+
+
+    # y = model(x)
+    #
+    # g = make_dot(y.mean(), params=dict(model.named_parameters()))
+    # g.render()
+    #
+    # plt.show()
+
+
+    print(sum(p.numel() for p in model.parameters()))
+    # print([p.dtype for p in model.parameters()])
+    #
+    # logits = model(x)   # logits: (B,), attn_w: (B, T)
+    #
     # Loss (binary): braking in next H samples (horizon) = 1 vs 0
-    y = torch.randint(0, 2, (B,), dtype=torch.float32)
-    pos_weight = torch.tensor([4.0])  # tune based on class imbalance
-    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
-
-    loss = criterion(logits, y)
-    loss.backward()
-    nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+    # y = torch.randint(0, 2, (B,), dtype=torch.float32)
+    # pos_weight = torch.tensor([4.0])  # tune based on class imbalance
+    # criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+    #
+    # loss = criterion(logits, y)
+    # loss.backward()
+    # nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
 # if __name__ == "__main__":
 #     x = torch.rand((25, 200, 59), dtype=torch.float32)
 #
