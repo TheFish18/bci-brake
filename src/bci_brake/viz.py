@@ -7,6 +7,9 @@ import torch
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 
+from ray import tune
+import plotly.express as px
+
 from bci_brake.data import BrakeDset, X_DROP_FEATS
 from bci_brake.model import EEGBrakeSeqLSTM
 
@@ -106,8 +109,62 @@ def plt_breaking_start(dset: BrakeDset):
 
     # x, target, react_time = ds
 
+def parallel_coords_tune(tune_path):
+    from bci_brake.main import train_from_config
+
+    tuner = tune.Tuner.restore(tune_path, trainable=train_from_config)
+
+    df = tuner.get_results().get_dataframe(
+        filter_metric="validation_iou",
+        filter_mode="max"
+    )
+
+    cols = df.columns
+    cols = [c.split("/")[-1] for c in cols]
+    df.columns = cols
+
+    df["kernel"] = list(zip(
+        df["kernel_0"],
+        df["kernel_1"],
+        df["kernel_2"]
+    ))
+
+    df["dilation"] = list(zip(
+        df["dilation_0"],
+        df["dilation_1"],
+        df["dilation_2"]
+    ))
+
+    # labels = ["window_length", "cnn_branch_out", "kernel", "dilation", "lstm_layers", "dropout", "lr", "weight_decay",
+    #           "validation_iou"]
+
+    dilations = [f"dilation_{i}" for i in range(3)]
+    kernels = [f"kernel_{i}" for i in range(3)]
+
+    xs = ["window_length"]
+    xs.extend(dilations)
+    xs.extend(kernels)
+
+    y = df["validation_iou"]
+
+    for x in xs:
+        x_ = df[x]
+
+        plt.scatter(x_, y)
+        plt.title(x)
+        plt.tight_layout()
+        plt.show()
+
+
+
 
 if __name__ == "__main__":
+    import sys
+    p = "/home/josh/projects/python/BCIBrake/data/trainings/tune/train_from_config_2025-09-11_21-23-57"
+    parallel_coords_tune(p)
+
+    sys.exit()
+
     mat_p = "/home/josh/projects/python/BCIBrake/data/mats/VPih.mat"
     model_p = "/home/josh/projects/python/BCIBrake/data/trainings/focal_loss_2/models/best.pt"
     device = 0
