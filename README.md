@@ -1,6 +1,6 @@
 This is a work in progress
 
-# Intro
+# Motivations
 
 Recently, on my commute to work, I was driving in the straight-through lane behind another car, 
 with a third vehicle in the left-turn-only lane. When the light turned green, 
@@ -42,6 +42,45 @@ enabling integration with a vehicle’s braking system to reduce reaction delays
 2. Ensure generalization so the model works across new participants without extensive retraining.
 3. Operate in pseudo-online mode at 250 Hz to meet real-time performance requirements.
 4. Deploy on embedded hardware (ATMEGA2560), demonstrating feasibility for integration into real systems.
+
+# Methods
+
+While EMG and EOG data was available, I stuck with EEG data to most closely mimic a BCI system. EMG data would greatly
+increase iou because it gives a very clearn signal when the participant violently moves their leg to slam on the brakes.
+
+The stimulus ($T_s$) is defined as the moment in time the lead car starts braking and the response ($T_r$) is the moment
+in time when the participant starts braking thereafter. Positive samples are defined by sequential stimulus, response; while,
+negative samples are defined by the absence of a stimulus. In positive samples, the reaction time is defined as $\delta_R = T_r - T_s$,
+the time it takes the participant to start pressing the brake pedal after the lead car starts braking.
+
+The AI was trained on roughly 50% positive and 50% negative samples. Each sample had a standardized window delta ($delta_W$), 
+which comprised the entire sample length and was 2000 ms, and a horizon delta ($delta_H$) which was the period of 
+time before the stimulus appears which was randomized between 100 - 500 ms between samples. 
+
+![example training data](data/images/training_example.png)
+**Figure: Training Data Example Structure:** the red and purple lines depict the deflection of the lead and 
+participant car's brake pedal, respectively. The red arrow depicts the stimulus - the moment the lead car starts braking - 
+and the purple arrow depicts the response - the moment the participant starts braking. The reaction time, purple rectangle, is defined as the 
+response time less the stimulus time. The window time, orange rectangle, is the length of the entire sample events, and the
+horizon time, green rectangle, is the guaranteed length of time before a stimulus occurs.
+
+For model, I am using a CNN + LSTM classification model. The data is first run through the CNN portion which combines
+multiple EEG channels in a spatial conservative manner. 
+
+lead car braking (the stimulus) 
+and the purple arrow depicts the 
+
+1. describe dataset
+2. describe AI model
+
+# Results
+
+1. Describe IOU, Precision, recall, AUC, etc.
+2. Present results
+3. present BCI v. human reaction times
+4. Plots
+
+
 
 # Haufe Notes:
 - A simulated assistance system using EEG and
