@@ -1,6 +1,7 @@
 # USER
 data/
 .idea/
+**/*scratch.py
 
 # Python-generated files
 __pycache__/
